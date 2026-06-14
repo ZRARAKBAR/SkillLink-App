@@ -1,0 +1,57 @@
+[
+  {
+    "task_id": "t101",
+    "customer_id": "c001",
+    "title": "Fix leaking kitchen sink",
+    "category": "Plumber",
+    "description": "The PVC pipe under the main kitchen sink is dripping constantly. Need it fixed or replaced today.",
+    "location": "Farid Town, Sahiwal",
+    "budget_expected": "Rs. 800 - 1200",
+    "status": "open",
+    "posted_time": "2026-04-22T10:30:00Z"
+  },
+  {
+    "task_id": "t102",
+    "customer_id": "c002",
+    "title": "Install 2 Ceiling Fans",
+    "category": "Electrician",
+    "description": "I have purchased two new ceiling fans. I just need a professional to wire and hang them safely in the TV lounge.",
+    "location": "Shadman Town, Sahiwal",
+    "budget_expected": "Rs. 1500 - 2000",
+    "status": "open",
+    "posted_time": "2026-04-22T09:15:00Z"
+  },
+  {
+    "task_id": "t103",
+    "customer_id": "c003",
+    "title": "Repair Broken Wooden Chair",
+    "category": "Carpenter",
+    "description": "One of my dining chairs has a broken leg. Need someone to use wood glue and nails to make it sturdy again.",
+    "location": "Tariq Bin Ziad Colony, Sahiwal",
+    "budget_expected": "Rs. 500 - 800",
+    "status": "open",
+    "posted_time": "2026-04-21T16:45:00Z"
+  },
+  {
+    "task_id": "t104",
+    "customer_id": "c004",
+    "title": "Full House Cleaning",
+    "category": "Cleaner",
+    "description": "Moving into a new 5-marla house. Need a deep clean of the floors, 2 bathrooms, and kitchen before we bring the furniture.",
+    "location": "Fateh Sher Colony, Sahiwal",
+    "budget_expected": "Rs. 3000 - 4000",
+    "status": "open",
+    "posted_time": "2026-04-22T11:00:00Z"
+  },
+  {
+    "task_id": "t105",
+    "customer_id": "c005",
+    "title": "Fix AC Cooling Issue",
+    "category": "AC Technician",
+    "description": "My 1.5 Ton AC is turning on but throwing warm air. Might need gas refilling or a capacitor change.",
+    "location": "Jahaz Ground area, Sahiwal",
+    "budget_expected": "Rs. 2500 - 4000",
+    "status": "completed",
+    "posted_time": "2026-04-18T14:20:00Z"
+  }
+]

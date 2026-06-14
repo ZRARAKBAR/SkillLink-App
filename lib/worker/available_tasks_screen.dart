@@ -1,0 +1,270 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+class AvailableTasksScreen extends StatefulWidget {
+  const AvailableTasksScreen({Key? key}) : super(key: key);
+
+  @override
+  State<AvailableTasksScreen> createState() => _AvailableTasksScreenState();
+}
+
+class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
+  String _selectedCategory = 'All';
+  final List<String> _categories = ['All', 'Handyman', 'Electrician', 'Plumbing', 'Tech', 'Cleaning'];
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Setting up the Firestore query based on selected category
+    Query tasksQuery = FirebaseFirestore.instance.collection('tasks');
+
+    if (_selectedCategory != 'All') {
+      tasksQuery = tasksQuery.where('category', isEqualTo: _selectedCategory);
+    }
+
+    // Optional: order by newest if you have a timestamp field
+    // tasksQuery = tasksQuery.orderBy('createdAt', descending: true);
+
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(
+        title: const Text(
+          'Available Tasks',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: Column(
+        children: [
+          // 1. Search Bar Section
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value.toLowerCase();
+                });
+              },
+              decoration: InputDecoration(
+                hintText: 'Search for tasks...',
+                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() { _searchQuery = ''; });
+                  },
+                )
+                    : null,
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+
+          // 2. Horizontal Category Filter
+          SizedBox(
+            height: 40,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _categories.length,
+              padding: const EdgeInsets.only(left: 16),
+              itemBuilder: (context, index) {
+                final category = _categories[index];
+                final isSelected = _selectedCategory == category;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    label: Text(category),
+                    selected: isSelected,
+                    selectedColor: Colors.deepPurple,
+                    checkmarkColor: Colors.white,
+                    labelStyle: TextStyle(
+                        color: isSelected ? Colors.white : Colors.black87,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
+                    ),
+                    backgroundColor: Colors.white,
+                    onSelected: (bool selected) {
+                      setState(() {
+                        _selectedCategory = category;
+                      });
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 3. Real-time Firestore Tasks List
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: tasksQuery.snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return const Center(child: Text('Something went wrong'));
+                }
+
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Colors.deepPurple));
+                }
+
+                final docs = snapshot.data?.docs ?? [];
+
+                // Local client-side filtering for basic search functionality
+                final filteredDocs = docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final title = (data['title'] ?? '').toString().toLowerCase();
+                  return title.contains(_searchQuery);
+                }).toList();
+
+                if (filteredDocs.isEmpty) {
+                  return const Center(
+                    child: Text('No tasks available matching your criteria.'),
+                  );
+                }
+
+                return ListView.builder(
+                  itemCount: filteredDocs.length,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemBuilder: (context, index) {
+                    final taskData = filteredDocs[index].data() as Map<String, dynamic>;
+                    // Passing document ID along in case you need it for the detail page
+                    final taskId = filteredDocs[index].id;
+                    return _buildTaskCard(taskData, taskId);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Task Card Widget Component
+  Widget _buildTaskCard(Map<String, dynamic> task, String taskId) {
+    // Safely mapping dynamic lists from Firestore
+    final List<dynamic> rawTags = task['tags'] ?? [];
+    final List<String> tags = rawTags.map((e) => e.toString()).toList();
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          // TODO: Navigate to Task Details Screen using taskId
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top Row: Category & Posted Time
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      task['category'] ?? 'General',
+                      style: const TextStyle(
+                        color: Colors.deepPurple,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    task['postedTime'] ?? 'Just now',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Title
+              Text(
+                task['title'] ?? 'Untitled Task',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Details Row: Location & Type
+              Row(
+                children: [
+                  Icon(Icons.location_on_outlined, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(task['location'] ?? 'Remote', style: TextStyle(color: Colors.grey[600])),
+                  const SizedBox(width: 16),
+                  Icon(Icons.work_outline, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(task['type'] ?? 'Fixed', style: TextStyle(color: Colors.grey[600])),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              Divider(color: Colors.grey[200], height: 1),
+              const SizedBox(height: 12),
+
+              // Bottom Row: Tags & Budget
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: tags.map((tag) {
+                        return Chip(
+                          label: Text(tag, style: const TextStyle(fontSize: 10)),
+                          backgroundColor: Colors.grey[200],
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: EdgeInsets.zero,
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  Text(
+                    task['budget'] ?? '\$0',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
