@@ -79,4 +79,4 @@ This project is actively evolving. Features may be incomplete or updated as deve
 If you like this project, consider giving it a ⭐ on GitHub to support its development.
 
 ---
->>>>>>> 7df150a38dd521398f16ea9cbc632e6cf96e78bb
+ 
