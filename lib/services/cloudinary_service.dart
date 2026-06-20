@@ -28,7 +28,12 @@ class CloudinaryService {
   }
 
   // MOBILE UPLOAD
-  static Future<String?> _uploadFile(String path, {required bool isImage, required bool isBytes}) async {
+// MOBILE UPLOAD (works on Android/iOS/Desktop)
+  static Future<String?> _uploadFile(
+      String path, {
+        required bool isImage,
+        required bool isBytes,
+      }) async {
     final endpoint = isImage ? "image" : "raw";
 
     final url = Uri.parse(
@@ -38,7 +43,10 @@ class CloudinaryService {
     final request = http.MultipartRequest("POST", url);
 
     request.fields["upload_preset"] = uploadPreset;
-    request.files.add(await http.MultipartFile.fromPath("file", path));
+
+    request.files.add(
+      await http.MultipartFile.fromPath("file", path),
+    );
 
     final response = await request.send();
     final resStr = await response.stream.bytesToString();
@@ -48,11 +56,16 @@ class CloudinaryService {
       return data["secure_url"];
     }
 
-    return null;
+    throw Exception("Upload failed: $resStr");
   }
 
   // WEB UPLOAD (BYTES)
-  static Future<String?> _uploadBytes(Uint8List bytes, String fileName, {required bool isImage}) async {
+// WEB UPLOAD (FIXED)
+  static Future<String?> _uploadBytes(
+      Uint8List bytes,
+      String fileName, {
+        required bool isImage,
+      }) async {
     final endpoint = isImage ? "image" : "raw";
 
     final url = Uri.parse(
@@ -62,7 +75,14 @@ class CloudinaryService {
     final request = http.MultipartRequest("POST", url);
 
     request.fields["upload_preset"] = uploadPreset;
-    request.fields["file"] = base64Encode(bytes);
+
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        "file",
+        bytes,
+        filename: fileName,
+      ),
+    );
 
     final response = await request.send();
     final resStr = await response.stream.bytesToString();
@@ -72,6 +92,5 @@ class CloudinaryService {
       return data["secure_url"];
     }
 
-    return null;
-  }
-}
+    throw Exception("Upload failed: $resStr");
+  }}

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:skilllink_app/auth/login_screen.dart';
 import 'package:skilllink_app/worker/send_offer_screen.dart';
+import 'package:skilllink_app/worker/worker_task_details_screen.dart';
 
 class WorkerDashboardScreen extends StatefulWidget {
   const WorkerDashboardScreen({super.key});
@@ -110,7 +111,7 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('tasks')
-          .where('status', isEqualTo: 'open')
+          .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -118,6 +119,16 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
         }
 
         final tasks = snapshot.data?.docs ?? [];
+        final filteredTasks = tasks.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+
+          final status = (data['status'] ?? '').toString().toLowerCase();
+
+          // Show only active jobs for workers
+          return status == 'pending' ||
+              status == 'posted' ||
+              status == 'open';
+        }).toList();
 
         return ListView(
           padding: const EdgeInsets.all(16.0),
@@ -129,21 +140,21 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
               children: [
                 const Text("New Tasks Near You",
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                Text("${tasks.length} Live",
+                Text("${filteredTasks.length} Live",
                     style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
               ],
             ),
             const SizedBox(height: 15),
-            if (tasks.isEmpty)
-              _buildEmptyState("No jobs posted yet in your area.")
+            if (filteredTasks.isEmpty)
+              _buildEmptyState("No active jobs available right now.")
             else
               ListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                itemCount: tasks.length,
+                itemCount: filteredTasks.length,
                 itemBuilder: (context, index) {
-                  var taskData = tasks[index].data() as Map<String, dynamic>;
-                  String taskId = tasks[index].id;
+                  var taskData = filteredTasks[index].data() as Map<String, dynamic>;
+                  String taskId = filteredTasks[index].id;
                   return _buildTaskCard(taskData, taskId);
                 },
               ),
@@ -184,53 +195,121 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
   }
 
   Widget _buildTaskCard(Map<String, dynamic> task, String taskId) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 15),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.grey[300]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: bgGrey, borderRadius: BorderRadius.circular(8)),
-                child: Text(task['category'] ?? 'General', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
-              Text("Rs. ${task['budget'] ?? task['budget_expected'] ?? 'N/A'}",
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
-            ],
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WorkerTaskDetailsScreen(
+              taskId: taskId,
+              taskData: task,
+            ),
           ),
-          const SizedBox(height: 12),
-          Text(task['title'] ?? 'No Title Provided', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text(task['description'] ?? '', style: TextStyle(color: Colors.grey[700], height: 1.4)),
-          const SizedBox(height: 15),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 15),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: bgGrey,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    task['category'] ?? 'General',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                Text(
+                  "Rs. ${task['budget'] ?? task['budget_expected'] ?? 'N/A'}",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            Text(
+              task['title'] ?? 'No Title Provided',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Text(
+              task['description'] ?? '',
+              style: TextStyle(
+                color: Colors.grey[700],
+                height: 1.4,
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
                   backgroundColor: primaryBlack,
                   foregroundColor: inDriveGreen,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
-              ),
-              onPressed: () {
-                Navigator.push(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: () async {
+                  final existing = await FirebaseFirestore.instance
+                      .collectionGroup('offers')
+                      .where('workerId', isEqualTo: _currentUid)
+                      .where('taskId', isEqualTo: taskId)
+                      .get();
+
+                  if (existing.docs.isNotEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("You already applied for this task"),
+                      ),
+                    );
+                    return;
+                  }
+
+                  Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (c) => const SendOfferScreen())
-                );
-              },
-              child: const Text("SEND OFFER", style: TextStyle(fontWeight: FontWeight.bold)),
+                    MaterialPageRoute(
+                      builder: (c) => const SendOfferScreen(),
+                    ),
+                  );
+                },
+                child: const Text(
+                  "SEND OFFER",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
             ),
-          )
-        ],
+          ],
+        ),
       ),
     );
   }

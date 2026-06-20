@@ -1,7 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import '../services/cloudinary_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
+
+
+
 
 class PostTaskScreen extends StatefulWidget {
   final String? initialCategory;
@@ -19,44 +27,130 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
   final Color primaryBlack = const Color(0xFF121212);
   final Color inDriveGreen = const Color(0xFFC6FF00);
 
-  Future<void> _handlePostTask() async {
-    if (_titleController.text.isEmpty || _budgetController.text.isEmpty) {
+  bool _isPosting = false;
+  bool _uploadingImage = false;
+
+  File? _selectedImage;
+  Uint8List? _imageBytes;
+
+  final ImagePicker _picker = ImagePicker();
+
+  String? get _imageUrl => null;
+
+  // ---------------- IMAGE PICK ----------------
+  Future<void> _pickImage() async {
+    try {
+      final XFile? file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (file == null) return;
+
+      final bytes = await file.readAsBytes();
+
+      if (!mounted) return;
+
+      setState(() {
+        _selectedImage = File(file.path);
+        _imageBytes = bytes;
+      });
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill in the title and budget")),
+        SnackBar(content: Text("Image pick error: $e")),
+      );
+    }
+  }
+  // ---------------- IMAGE UPLOAD ----------------
+  Future<void> _uploadImage() async {
+    if (_selectedImage == null) return;
+
+    setState(() => _uploadingImage = true);
+
+    try {
+      final url =
+      await CloudinaryService.uploadImage(_selectedImage!);
+
+      if (!mounted) return;
+
+      setState(() {
+        var _imageUrl = url;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Upload failed: $e")),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _uploadingImage = false);
+      }
+    }
+  }
+  // ---------------- POST TASK ----------------
+  Future<void> _handlePostTask() async {
+    final title = _titleController.text.trim();
+    final desc = _descController.text.trim();
+    final budgetText = _budgetController.text.trim();
+
+    if (title.isEmpty || budgetText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Title and Budget are required")),
       );
       return;
     }
+
+    final double? budget = double.tryParse(budgetText);
+
+    if (budget == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Enter a valid budget")),
+      );
+      return;
+    }
+
+    setState(() => _isPosting = true);
 
     try {
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-       Position pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      await FirebaseFirestore.instance.collection("tasks").add({
+      Map<String, dynamic> taskData = {
         "customerId": user.uid,
-        "title": _titleController.text.trim(),
+        "title": title,
         "category": widget.initialCategory ?? "General",
-        "description": _descController.text.trim(),
+        "description": desc,
+        "budget": budget,
+        "status": "pending",
+        "imageUrl": _imageUrl ?? "",
+        "createdAt": FieldValue.serverTimestamp(),
+        "assignedWorkerId": null,
+        "customerRating": null,
+        "workerRating": null,
+        "priority": "normal",
+        "allowAiMatching": true,
+      };
 
-         "budget": double.parse(_budgetController.text),
+      try {
+        Position pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
 
-        "status": "open",
+        taskData["location"] = GeoPoint(pos.latitude, pos.longitude);
+      } catch (_) {
+        taskData["location"] = null;
+      }
 
-         "createdAt": FieldValue.serverTimestamp(),
+      await FirebaseFirestore.instance.collection("tasks").add(taskData);
 
-         "location": GeoPoint(pos.latitude, pos.longitude),
-      });
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          backgroundColor: inDriveGreen,
           content: const Text(
             "Task Posted Successfully!",
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+            style: TextStyle(color: Colors.black),
           ),
-          backgroundColor: inDriveGreen,
         ),
       );
 
@@ -65,55 +159,272 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: $e")),
       );
+    } finally {
+      if (mounted) setState(() => _isPosting = false);
     }
   }
 
   @override
+  void dispose() {
+    _titleController.dispose();
+    _descController.dispose();
+    _budgetController.dispose();
+    super.dispose();
+  }
+
+  // ---------------- UI ----------------
+  @override
+  @override
   Widget build(BuildContext context) {
+    final Color neonGreen = const Color(0xFFC6FF00);
+    final Color dark = const Color(0xFF121212);
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Post New Task")),
+      backgroundColor: const Color(0xFFF5F6FA),
+
+      appBar: AppBar(
+        title: const Text("SkillLink Task"),
+        backgroundColor: dark,
+        elevation: 0,
+      ),
+
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(25.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: _titleController,
-              decoration: const InputDecoration(
-                labelText: "What do you need help with?",
-              ),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _budgetController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: "Your Budget (Rs.)"),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _descController,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: "Describe the issue...",
-              ),
-            ),
-            const SizedBox(height: 40),
-            SizedBox(
+
+            // 🌟 HERO HEADER (ANIMATED STYLE LOOK)
+            Container(
               width: double.infinity,
-              height: 55,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryBlack,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    dark,
+                    Colors.black87,
+                  ],
                 ),
-                onPressed: _handlePostTask,
-                child: Text(
-                  "POST TASK NOW",
-                  style: TextStyle(color: inDriveGreen),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: neonGreen.withOpacity(0.2),
+                    blurRadius: 20,
+                    spreadRadius: 1,
+                  )
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Post a SkillLink Task ⚡",
+                    style: TextStyle(
+                      color: neonGreen,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    "Get instant help from skilled workers near you",
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // TITLE
+            _buildField(
+              controller: _titleController,
+              label: "What do you need?",
+              icon: Icons.title,
+            ),
+
+            const SizedBox(height: 12),
+
+            // BUDGET
+            _buildField(
+              controller: _budgetController,
+              label: "Your Budget (Rs.)",
+              icon: Icons.attach_money,
+              number: true,
+            ),
+
+            const SizedBox(height: 12),
+
+            // DESCRIPTION
+            _buildField(
+              controller: _descController,
+              label: "Describe your task",
+              icon: Icons.description,
+              maxLines: 4,
+            ),
+
+            const SizedBox(height: 20),
+
+            // IMAGE CARD (SKILLINK STYLE)
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                  )
+                ],
+              ),
+              child: Column(
+                children: [
+
+                  // IMAGE
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    child: _imageBytes != null
+                        ? ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.memory(
+                        _imageBytes!,
+                        height: 170,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                        : Container(
+                      height: 170,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.grey.shade200,
+                            Colors.grey.shade100,
+                          ],
+                        ),
+                      ),
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.cloud_upload,
+                              size: 40, color: Colors.grey),
+                          SizedBox(height: 5),
+                          Text("Upload Task Image"),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // BUTTONS
+                  Row(
+                    children: [
+
+                      Expanded(
+                        child: _miniButton(
+                          text: "Pick",
+                          icon: Icons.photo,
+                          color: Colors.blueGrey,
+                          onTap: _pickImage,
+                        ),
+                      ),
+
+                      const SizedBox(width: 10),
+
+                      Expanded(
+                        child: _miniButton(
+                          text: _uploadingImage ? "Uploading..." : "Upload",
+                          icon: Icons.cloud_upload,
+                          color: neonGreen,
+                          onTap: _uploadingImage ? null : _uploadImage,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 25),
+
+            // POST BUTTON (SKILLINK STYLE)
+            GestureDetector(
+              onTap: _isPosting ? null : _handlePostTask,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: double.infinity,
+                height: 55,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: _isPosting
+                        ? [Colors.grey, Colors.grey]
+                        : [dark, neonGreen],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: neonGreen.withOpacity(0.25),
+                      blurRadius: 12,
+                    )
+                  ],
+                ),
+                child: Center(
+                  child: _isPosting
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                    "POST TASK ⚡",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
-            )
+            ),
           ],
         ),
       ),
     );
-  }
+  }}
+Widget _buildField({
+  required TextEditingController controller,
+  required String label,
+  required IconData icon,
+  bool number = false,
+  int maxLines = 1,
+}) {
+  return TextField(
+    controller: controller,
+    keyboardType: number ? TextInputType.number : TextInputType.text,
+    maxLines: maxLines,
+    decoration: InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
+    ),
+  );
+}
+Widget _miniButton({
+  required String text,
+  required IconData icon,
+  required Color color,
+  required VoidCallback? onTap,
+}) {
+  return ElevatedButton.icon(
+    onPressed: onTap,
+    icon: Icon(icon),
+    label: Text(text),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: color,
+    ),
+  );
 }

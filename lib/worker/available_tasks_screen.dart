@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:skilllink_app/worker/worker_task_details_screen.dart';
 
 class AvailableTasksScreen extends StatefulWidget {
   const AvailableTasksScreen({Key? key}) : super(key: key);
@@ -10,7 +11,15 @@ class AvailableTasksScreen extends StatefulWidget {
 
 class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
   String _selectedCategory = 'All';
-  final List<String> _categories = ['All', 'Handyman', 'Electrician', 'Plumbing', 'Tech', 'Cleaning'];
+  final List<String> _categories = [
+    'All',
+    'Handyman',
+    'Electrician',
+    'Plumbing',
+    'Tech',
+    'Cleaning',
+    'Mason',
+  ];
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -26,10 +35,11 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
     Query tasksQuery = FirebaseFirestore.instance.collection('tasks');
 
     if (_selectedCategory != 'All') {
-      tasksQuery = tasksQuery.where('category', isEqualTo: _selectedCategory);
-    }
-
-    // Optional: order by newest if you have a timestamp field
+      tasksQuery = tasksQuery.where(
+        'categoryLower',
+        isEqualTo: _selectedCategory.toLowerCase(),
+      );
+    }//optional: order by newest if you have a timestamp field
     // tasksQuery = tasksQuery.orderBy('createdAt', descending: true);
 
     return Scaffold(
@@ -131,7 +141,11 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
                 final filteredDocs = docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
                   final title = (data['title'] ?? '').toString().toLowerCase();
-                  return title.contains(_searchQuery);
+                  final category = (data['category'] ?? '').toString().toLowerCase();
+
+                  return title.contains(_searchQuery) ||
+                      category.contains(_searchQuery);
+
                 }).toList();
 
                 if (filteredDocs.isEmpty) {
@@ -171,7 +185,15 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
-          // TODO: Navigate to Task Details Screen using taskId
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => WorkerTaskDetailsScreen(
+                taskId: taskId,
+                taskData: task,
+              ),
+            ),
+          );
         },
         child: Padding(
           padding: const EdgeInsets.all(16.0),
