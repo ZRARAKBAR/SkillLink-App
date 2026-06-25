@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+
+
 class CloudinaryService {
   static const String cloudName = "dcxfysw0o";
   static const String uploadPreset = "skilllink_preset";
@@ -30,6 +32,7 @@ class CloudinaryService {
   // MOBILE UPLOAD
 // MOBILE UPLOAD (works on Android/iOS/Desktop)
   static Future<String?> _uploadFile(
+
       String path, {
         required bool isImage,
         required bool isBytes,

@@ -35,7 +35,7 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
 
   final ImagePicker _picker = ImagePicker();
 
-  String? get _imageUrl => null;
+  String? _imageUrl;
 
   // ---------------- IMAGE PICK ----------------
   Future<void> _pickImage() async {
@@ -52,8 +52,11 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
       if (!mounted) return;
 
       setState(() {
-        _selectedImage = File(file.path);
         _imageBytes = bytes;
+
+        if (!kIsWeb) {
+          _selectedImage = File(file.path);
+        }
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -63,18 +66,36 @@ class _PostTaskScreenState extends State<PostTaskScreen> {
   }
   // ---------------- IMAGE UPLOAD ----------------
   Future<void> _uploadImage() async {
-    if (_selectedImage == null) return;
-
     setState(() => _uploadingImage = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("✅ Image uploaded successfully"),
+        backgroundColor: Colors.green,
+      ),
+    );
 
     try {
-      final url =
-      await CloudinaryService.uploadImage(_selectedImage!);
+      String? url;
+
+      if (kIsWeb) {
+        if (_imageBytes == null) return;
+
+        url = await CloudinaryService.uploadImageFromBytes(
+          _imageBytes!,
+          fileName: "task_image.jpg",
+        );
+      } else {
+        if (_selectedImage == null) return;
+
+        url = await CloudinaryService.uploadImage(
+          _selectedImage!,
+        );
+      }
 
       if (!mounted) return;
 
       setState(() {
-        var _imageUrl = url;
+        _imageUrl = url;
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

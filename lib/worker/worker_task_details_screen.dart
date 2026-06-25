@@ -16,13 +16,20 @@ class WorkerTaskDetailsScreen extends StatefulWidget {
   @override
   State<WorkerTaskDetailsScreen> createState() =>
       _WorkerTaskDetailsScreenState();
+
 }
 
 class _WorkerTaskDetailsScreenState extends State<WorkerTaskDetailsScreen> {
   final Color primaryBlack = const Color(0xFF121212);
   final Color inDriveGreen = const Color(0xFFC6FF00);
+  late String _currentUid;
 
-  final String _currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+  @override
+  void initState() {
+    super.initState();
+    _currentUid = FirebaseAuth.instance.currentUser!.uid;
+  }
+
   String formatLocation(dynamic location) {
     if (location is GeoPoint) {
       return "${location.latitude}, ${location.longitude}";
@@ -38,6 +45,7 @@ class _WorkerTaskDetailsScreenState extends State<WorkerTaskDetailsScreen> {
 
     final List<dynamic> images = task['images'] ?? [];
 
+    final String imageUrl = (task['imageUrl'] ?? '').toString();
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -142,37 +150,75 @@ class _WorkerTaskDetailsScreenState extends State<WorkerTaskDetailsScreen> {
             const SizedBox(height: 20),
 
             // ================= IMAGES =================
-            if (images.isNotEmpty) ...[
+            // ================= IMAGES =================
+            if (imageUrl.isNotEmpty || images.isNotEmpty) ...[
               const Text(
                 "Images",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const SizedBox(height: 10),
-
-              SizedBox(
-                height: 120,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: images.length,
-                  itemBuilder: (context, index) {
-                    return Container(
-                      margin: const EdgeInsets.only(right: 10),
-                      width: 120,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        image: DecorationImage(
-                          image: NetworkImage(images[index]),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    );
-                  },
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
                 ),
               ),
 
+              const SizedBox(height: 10),
+
+              if (imageUrl.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    imageUrl,
+                    height: 220,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) return child;
+
+                      return const SizedBox(
+                        height: 220,
+                        child: Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 220,
+                        color: Colors.grey[200],
+                        child: const Center(
+                          child: Text("Failed to load image"),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+              if (images.isNotEmpty) ...[
+                const SizedBox(height: 10),
+
+                SizedBox(
+                  height: 120,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: images.length,
+                    itemBuilder: (context, index) {
+                      return Container(
+                        margin: const EdgeInsets.only(right: 10),
+                        width: 120,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          image: DecorationImage(
+                            image: NetworkImage(images[index]),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 20),
             ],
-
             // ================= SEND OFFER BUTTON =================
             SizedBox(
               width: double.infinity,
@@ -186,27 +232,44 @@ class _WorkerTaskDetailsScreenState extends State<WorkerTaskDetailsScreen> {
                   ),
                 ),
                 onPressed: () async {
-                  final existing = await FirebaseFirestore.instance
-                      .collectionGroup('offers')
-                      .where('workerId', isEqualTo: _currentUid)
-                      .where('taskId', isEqualTo: widget.taskId)
-                      .get();
+                  print("Step 1: Button pressed, starting async operation.");
 
-                  if (existing.docs.isNotEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("You already applied for this task"),
+                  try {
+                    final existing = await FirebaseFirestore.instance
+                        .collection("tasks")
+                        .doc(widget.taskId)
+                        .collection("offers")
+                        .where('workerId', isEqualTo: _currentUid)
+                        .get();
+
+                    print("Step 2: Firestore query finished. Found ${existing.docs.length} existing offers.");
+
+                    if (existing.docs.isNotEmpty) {
+                      print("Step 3: User already applied.");
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("You already applied for this task")),
+                      );
+                      return;
+                    }
+
+                    print("Step 4: Attempting to navigate to SendOfferScreen.");
+                    if (!context.mounted) return;
+
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SendOfferScreen(
+                          taskId: widget.taskId,
+                          taskData: widget.taskData,
+                        ),
                       ),
                     );
-                    return;
-                  }
+                    print("Step 5: Navigation called.");
 
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SendOfferScreen(),
-                    ),
-                  );
+                  } catch (e) {
+                    print("CRITICAL ERROR: $e");
+                  }
                 },
                 child: const Text(
                   "SEND OFFER",

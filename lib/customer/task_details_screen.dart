@@ -11,9 +11,8 @@ class TaskDetailsScreen extends StatelessWidget {
   final Color primaryBlack = const Color(0xFF121212);
   final Color inDriveGreen = const Color(0xFFC6FF00);
 
-   String generateChatId(String customerId, String workerId) {
-    final ids = [customerId, workerId];
-    ids.sort();
+  String _generateChatId(String customerId, String workerId) {
+    final ids = [customerId, workerId]..sort();
     return ids.join("_");
   }
 
@@ -40,8 +39,8 @@ class TaskDetailsScreen extends StatelessWidget {
             .collection("bookings")
             .doc(bookingId)
             .snapshots(),
-
         builder: (context, snapshot) {
+
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -56,6 +55,7 @@ class TaskDetailsScreen extends StatelessWidget {
           final String category = data["category"] ?? "Service";
           final String status = data["status"] ?? "pending";
           final int price = (data["price"] ?? 0);
+
           final String? phone = data["workerPhone"];
           final String? customerId = data["customerId"];
           final String? workerId = data["workerId"];
@@ -63,7 +63,7 @@ class TaskDetailsScreen extends StatelessWidget {
           return Stack(
             children: [
 
-              // MAP PLACEHOLDER
+              // ================= MAP PLACEHOLDER =================
               Positioned.fill(
                 child: Container(
                   color: Colors.grey[300],
@@ -74,22 +74,25 @@ class TaskDetailsScreen extends StatelessWidget {
                 ),
               ),
 
-              // BOTTOM SHEET
+              // ================= BOTTOM SHEET =================
               Align(
                 alignment: Alignment.bottomCenter,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 25, vertical: 15),
+                      horizontal: 20, vertical: 18),
                   decoration: BoxDecoration(
                     color: primaryBlack,
-                    borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(30)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(30),
+                    ),
                   ),
+
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
 
+                      // drag handle
                       Container(
                         width: 40,
                         height: 5,
@@ -99,12 +102,13 @@ class TaskDetailsScreen extends StatelessWidget {
                         ),
                       ),
 
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 18),
 
-                      // WORKER INFO
+                      // ================= WORKER INFO =================
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -139,31 +143,35 @@ class TaskDetailsScreen extends StatelessWidget {
                               const Text(
                                 "Fixed Price",
                                 style: TextStyle(
-                                    color: Colors.grey, fontSize: 12),
+                                  color: Colors.grey,
+                                  fontSize: 12,
+                                ),
                               ),
                             ],
                           ),
                         ],
                       ),
 
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 18),
 
-                      // STATUS
+                      // ================= STATUS (VIEW ONLY) =================
                       Container(
-                        padding: const EdgeInsets.all(15),
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(15),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         child: Row(
                           children: [
                             const Icon(Icons.info, color: Colors.grey),
                             const SizedBox(width: 10),
-                            const Text("Status",
-                                style: TextStyle(color: Colors.grey)),
+                            const Text(
+                              "Status",
+                              style: TextStyle(color: Colors.grey),
+                            ),
                             const Spacer(),
                             Text(
-                              status,
+                              status.toUpperCase(),
                               style: TextStyle(
                                 color: inDriveGreen,
                                 fontWeight: FontWeight.bold,
@@ -173,9 +181,9 @@ class TaskDetailsScreen extends StatelessWidget {
                         ),
                       ),
 
-                      const SizedBox(height: 25),
+                      const SizedBox(height: 20),
 
-                      // BUTTONS
+                      // ================= ACTIONS =================
                       Row(
                         children: [
 
@@ -190,23 +198,28 @@ class TaskDetailsScreen extends StatelessWidget {
                                 foregroundColor: Colors.white,
                               ),
                               onPressed: () {
-                                if (customerId == null || workerId == null) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                if (customerId == null ||
+                                    workerId == null) {
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(
                                     const SnackBar(
-                                        content: Text("Missing chat data")),
+                                      content: Text(
+                                          "Missing chat data"),
+                                    ),
                                   );
                                   return;
                                 }
 
                                 final chatId =
-                                generateChatId(customerId!, workerId!);
+                                _generateChatId(
+                                    customerId, workerId);
 
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (c) => ChatScreen(
-                                      userName: workerName,
-                                      chatId: chatId, // ✅ FIXED
+                                    builder: (_) => ChatScreen(
+                                      bookingId: bookingId,
+                                      receiverId: workerId,
                                     ),
                                   ),
                                 );
@@ -214,7 +227,7 @@ class TaskDetailsScreen extends StatelessWidget {
                             ),
                           ),
 
-                          const SizedBox(width: 15),
+                          const SizedBox(width: 12),
 
                           // CALL
                           Expanded(
@@ -227,15 +240,18 @@ class TaskDetailsScreen extends StatelessWidget {
                               ),
                               onPressed: () async {
                                 if (phone == null || phone.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(
                                     const SnackBar(
-                                        content:
-                                        Text("No phone number found")),
+                                      content: Text(
+                                          "No phone number found"),
+                                    ),
                                   );
                                   return;
                                 }
 
-                                final Uri url = Uri.parse("tel:$phone");
+                                final Uri url =
+                                Uri.parse("tel:$phone");
 
                                 if (await canLaunchUrl(url)) {
                                   await launchUrl(url);

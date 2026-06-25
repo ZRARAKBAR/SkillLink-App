@@ -3,13 +3,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class ChatScreen extends StatefulWidget {
-  final String chatId;
-  final String userName;
+  final String bookingId;
+  final String receiverId;
+  final String? chatId; // optional backward compatibility
 
   const ChatScreen({
     super.key,
-    required this.chatId,
-    required this.userName,
+    required this.bookingId,
+    required this.receiverId,
+    this.chatId,
   });
 
   @override
@@ -17,73 +19,106 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final TextEditingController _messageController = TextEditingController();
+  final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
-  final String currentUserId = FirebaseAuth.instance.currentUser!.uid;
+  String get uid => FirebaseAuth.instance.currentUser?.uid ?? "";
 
-  void _sendMessage() async {
-    if (_messageController.text.trim().isEmpty) return;
+  void sendMessage() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || uid.isEmpty) return;
 
-    await FirebaseFirestore.instance
-        .collection("chats")
-        .doc(widget.chatId)
-        .collection("messages")
-        .add({
-      "text": _messageController.text.trim(),
-      "senderId": currentUserId,
-      "receiverId": "",
-      "timestamp": FieldValue.serverTimestamp(),
-    });
+    // Clear UI immediately for a snappy feel
+    _controller.clear();
 
-    _messageController.clear();
+    try {
+      await FirebaseFirestore.instance
+          .collection("bookings")
+          .doc(widget.bookingId)
+          .collection("messages")
+          .add({
+        "text": text,
+        "senderId": uid,
+        "receiverId": widget.receiverId,
+        "timestamp": FieldValue.serverTimestamp(),
+      });
+
+      // auto scroll
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    } catch (e) {
+      debugPrint("Error sending message: $e");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.userName),
-        backgroundColor: const Color(0xFF121212),
-        foregroundColor: const Color(0xFFC6FF00),
-      ),
-
+      appBar: AppBar(title: const Text("Chat")),
       body: Column(
         children: [
-          // MESSAGES STREAM
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
-                  .collection("chats")
-                  .doc(widget.chatId)
+                  .collection("bookings")
+                  .doc(widget.bookingId)
                   .collection("messages")
                   .orderBy("timestamp", descending: false)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
+                // 1. Check for errors first so it doesn't load infinitely
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        "Error: ${snapshot.error}",
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  );
+                }
+
+                // 2. Show loading only when actively waiting for data
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                var messages = snapshot.data!.docs;
+                final docs = snapshot.data?.docs ?? [];
 
+                // 3. Handle empty state gracefully
+                if (docs.isEmpty) {
+                  return const Center(child: Text("No messages yet"));
+                }
+
+                // 4. Build the chat list
                 return ListView.builder(
-                  padding: const EdgeInsets.all(15),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    var data =
-                    messages[index].data() as Map<String, dynamic>;
-
-                    bool isMe = data["senderId"] == currentUserId;
+                  controller: _scrollController,
+                  itemCount: docs.length,
+                  itemBuilder: (context, i) {
+                    final data = docs[i].data() as Map<String, dynamic>? ?? {};
+                    final isMe = data["senderId"] == uid;
 
                     return Align(
                       alignment:
                       isMe ? Alignment.centerRight : Alignment.centerLeft,
                       child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 5),
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
                         padding: const EdgeInsets.all(12),
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.of(context).size.width * 0.75,
+                        ),
                         decoration: BoxDecoration(
-                          color: isMe
-                              ? const Color(0xFF121212)
-                              : Colors.grey[300],
+                          color: isMe ? Colors.black : Colors.grey[300],
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -100,35 +135,28 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
 
-          // INPUT BOX
+          // INPUT BAR
           Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.05))
-              ],
-            ),
+            padding: const EdgeInsets.all(8),
+            color: Colors.white,
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(
+                    controller: _controller,
+                    decoration: const InputDecoration(
                       hintText: "Type message...",
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(25),
-                      ),
+                      border: InputBorder.none,
                     ),
                   ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.send),
-                  onPressed: _sendMessage,
-                ),
+                  onPressed: sendMessage,
+                )
               ],
             ),
-          ),
+          )
         ],
       ),
     );

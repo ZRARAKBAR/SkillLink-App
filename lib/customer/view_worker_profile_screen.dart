@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:skilllink_app/customer/booking_tracking_screen.dart';
 
 class ViewWorkerProfileScreen extends StatelessWidget {
   final String workerId;
@@ -15,21 +16,39 @@ class ViewWorkerProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection("users")
-            .doc(workerId)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection("users")
+          .doc(workerId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.data() == null) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-          var data = snapshot.data!.data() as Map<String, dynamic>;
+        final Map<String, dynamic> data =
+        snapshot.data!.data() as Map<String, dynamic>;
 
-          return CustomScrollView(
+        final String fullName =
+            data["fullName"]?.toString() ?? "Worker";
+
+        final String skills =
+            data["skills"]?.toString() ?? "Worker";
+
+        final String address =
+            data["address"]?.toString() ?? "Not available";
+
+        final int experience =
+        (data["experience"] is int)
+            ? data["experience"]
+            : int.tryParse(data["experience"].toString()) ?? 0;
+
+        return Scaffold(
+          backgroundColor: Colors.white,
+
+          body: CustomScrollView(
             slivers: [
               SliverAppBar(
                 expandedHeight: 200,
@@ -37,7 +56,7 @@ class ViewWorkerProfileScreen extends StatelessWidget {
                 backgroundColor: primaryBlack,
                 flexibleSpace: FlexibleSpaceBar(
                   title: Text(
-                    data["fullName"] ?? "Worker",
+                    fullName,
                     style: const TextStyle(color: Colors.white),
                   ),
                   background: Container(color: primaryBlack),
@@ -50,7 +69,6 @@ class ViewWorkerProfileScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // NAME + ROLE
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -58,14 +76,14 @@ class ViewWorkerProfileScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                data["fullName"] ?? "",
+                                fullName,
                                 style: const TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               Text(
-                                data["skills"] ?? "Worker",
+                                skills,
                                 style: const TextStyle(color: Colors.grey),
                               ),
                             ],
@@ -73,21 +91,26 @@ class ViewWorkerProfileScreen extends StatelessWidget {
                           const CircleAvatar(
                             radius: 25,
                             backgroundColor: Color(0xFFC6FF00),
-                            child: Icon(Icons.verified, color: Colors.black),
+                            child: Icon(
+                              Icons.verified,
+                              color: Colors.black,
+                            ),
                           ),
                         ],
                       ),
 
                       const SizedBox(height: 25),
 
-                      // STATS
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           _statItem("150", "Jobs"),
-                          _statItem("4.9", "Rating"),
                           _statItem(
-                              "${data["experience"] ?? 0}y", "Exp"),
+                            ((data["rating"] ?? 0.0) as num)
+                                .toStringAsFixed(1),
+                            "Rating",
+                          ),
+                          _statItem("${experience}y", "Exp"),
                         ],
                       ),
 
@@ -96,13 +119,15 @@ class ViewWorkerProfileScreen extends StatelessWidget {
                       const Text(
                         "Bio",
                         style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
 
                       const SizedBox(height: 10),
 
                       Text(
-                        "Skilled ${data["skills"] ?? "worker"} with ${data["experience"] ?? 0} years of experience.",
+                        "Skilled $skills with $experience years of experience.",
                         style: const TextStyle(
                           color: Colors.black87,
                           height: 1.5,
@@ -114,65 +139,100 @@ class ViewWorkerProfileScreen extends StatelessWidget {
                       const Text(
                         "Address",
                         style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold),
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
 
                       const SizedBox(height: 10),
 
                       Text(
-                        data["address"] ?? "Not available",
+                        address,
                         style: const TextStyle(color: Colors.grey),
                       ),
                     ],
                   ),
                 ),
-              )
+              ),
             ],
-          );
-        },
-      ),
-
-      // HIRE BUTTON
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(20),
-        child: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: primaryBlack,
-            foregroundColor: inDriveGreen,
-            minimumSize: const Size(double.infinity, 55),
           ),
-          onPressed: () async {
-            // CREATE BOOKING
-            User? user = FirebaseAuth.instance.currentUser;
 
-            await FirebaseFirestore.instance.collection("bookings").add({
-              "customerId": user!.uid,
-              "workerId": workerId,
-              "status": "pending",
-              "createdAt": FieldValue.serverTimestamp(),
-            });
+          // ================= HIRE BUTTON =================
+          bottomNavigationBar: Container(
+            padding: const EdgeInsets.all(20),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryBlack,
+                foregroundColor: inDriveGreen,
+                minimumSize: const Size(double.infinity, 55),
+              ),
 
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Worker Hired!")),
-            );
-          },
-          child: const Text(
-            "CONFIRM HIRE",
-            style: TextStyle(fontWeight: FontWeight.bold),
+              onPressed: () async {
+                final user = FirebaseAuth.instance.currentUser;
+                if (user == null) return;
+
+                final bookingRef = FirebaseFirestore.instance
+                    .collection("bookings")
+                    .doc();
+
+                await bookingRef.set({
+                  "customerId": user.uid,
+                  "workerId": workerId,
+                  "type": "direct",
+                  "status": "pending",
+                  "createdAt": FieldValue.serverTimestamp(),
+
+                  // tracking + rating support (SAFE ADDITION)
+                  "workerName": fullName,
+                  "workerPhone": data["phone"] ?? "",
+                  "category": skills,
+                  "price": data["servicePrice"] ?? 0,
+                });
+
+                if (!context.mounted) return;
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Worker Hired!")),
+                );
+
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => BookingTrackingScreen(
+                      bookingId: bookingRef.id,
+                    ),
+                  ),
+                );
+              },
+
+              child: const Text(
+                "CONFIRM HIRE",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   Widget _statItem(String val, String label) {
     return Column(
       children: [
-        Text(val,
-            style: const TextStyle(
-                fontSize: 18, fontWeight: FontWeight.bold)),
-        Text(label,
-            style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        Text(
+          val,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.grey,
+            fontSize: 12,
+          ),
+        ),
       ],
     );
   }

@@ -12,24 +12,64 @@ import 'package:geolocator/geolocator.dart';
 import 'package:skilllink_app/auth/login_screen.dart';
 import 'package:skilllink_app/customer/post_task_screen.dart';
 import 'package:skilllink_app/customer/nearby_workers_screen.dart';
+import 'package:skilllink_app/customer/task_history_screen.dart';
 import 'package:skilllink_app/models/user_model.dart';
+import 'package:skilllink_app/customer/view_worker_profile_screen.dart';
+import 'package:skilllink_app/customer/offers_list_screen.dart';
+import 'package:skilllink_app/customer/booking_tracking_screen.dart';
+import 'package:skilllink_app/customer/task_details_screen.dart';
+import 'package:skilllink_app/customer/CustomerActiveTasksScreen.dart';
+
+import 'package:skilllink_app/customer/update_location_screen.dart';
+import 'package:skilllink_app/customer/support_screen.dart';
+import 'package:skilllink_app/customer/settings_screen.dart';
+
+
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
 
   @override
   State<CustomerHomeScreen> createState() => _CustomerHomeScreenState();
+  Stream<QuerySnapshot> _customerBookingsStream() {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    return FirebaseFirestore.instance
+        .collection("bookings")
+        .where("customerId", isEqualTo: uid)
+        .snapshots();
+  }
 }
 
 class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
+  Widget _buildMap() {
+    if (_currentLocation == null) {
+      return Center(
+        child: CircularProgressIndicator(
+          color: primaryColor,
+        ),
+      );
+    }
 
-  // ================= COLORS =================
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(
+        target: _currentLocation!,
+        zoom: 15,
+      ),
+      myLocationEnabled: true,
+      myLocationButtonEnabled: false,
+      zoomControlsEnabled: false,
+      onMapCreated: (controller) {
+        _mapController = controller;
+      },
+    );
+  }
+
 
   final Color primaryColor = const Color(0xFFC6FF00);
   final Color darkColor = const Color(0xFF121212);
   final Color backgroundColor = const Color(0xFFF7F7F7);
 
-  // ================= VARIABLES =================
 
   int _bottomIndex = 0;
 
@@ -55,7 +95,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     {"name": "Carpenter", "icon": Icons.handyman},
   ];
 
-  // ================= INIT =================
 
   @override
   void initState() {
@@ -69,7 +108,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     await _loadNearbyWorkers();
   }
 
-  // ================= LOCATION =================
 
   Future<void> _getCurrentLocation() async {
     try {
@@ -86,7 +124,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     }
   }
 
-  // ================= USER =================
 
   Future<void> _loadUserData() async {
     try {
@@ -147,11 +184,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             geo.latitude,
             geo.longitude,
           );
-
           workers.add({
-            'fullName': data['fullName'] ?? 'Worker',
-            'distance': distance,
-            'rating': data['rating'] ?? 4.5,
+            'id': doc.id,
+            'fullName': data['fullName']?.toString() ?? 'Worker',
+            'distance': distance ?? 0.0,
+            'rating': (data['rating'] is num) ? data['rating'] : 4.5,
           });
         }
       }
@@ -169,7 +206,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     }
   }
 
-  // ================= LOGOUT =================
 
   Future<void> _logout() async {
 
@@ -190,7 +226,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
     return Scaffold(
 
-      backgroundColor: backgroundColor,
+      backgroundColor: Colors.white,
 
       drawer: _buildDrawer(),
 
@@ -220,52 +256,79 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
-  // ================= HOME =================
 
   Widget _buildHomeTab() {
-
     return Stack(
-
       children: [
 
-        // MAP
-
-        _currentLocation == null
-            ? Center(
-          child: CircularProgressIndicator(
-            color: primaryColor,
-          ),
-        )
-            : GoogleMap(
-
-          initialCameraPosition: CameraPosition(
-            target: _currentLocation!,
-            zoom: 15,
-          ),
-
-          myLocationEnabled: true,
-
-          myLocationButtonEnabled: false,
-
-          zoomControlsEnabled: false,
-
-          onMapCreated: (controller) {
-            _mapController = controller;
-          },
+        // ✅ MAP (FULL BACKGROUND)
+        Positioned.fill(
+          child: _buildMap(),
         ),
-
         // TOP PANEL
 
         SafeArea(
 
+
           child: Padding(
 
+
             padding: const EdgeInsets.all(20),
+
 
             child: Column(
 
               children: [
 
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection("bookings")
+                      .where("customerId", isEqualTo: FirebaseAuth.instance.currentUser!.uid)
+                      .where("status", whereIn: ["pending", "accepted", "in_progress"])
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return const SizedBox();
+                    }
+
+                    final doc = snapshot.data!.docs.first;
+
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BookingTrackingScreen(
+                              bookingId: doc.id,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.work, color: Color(0xFFC6FF00)),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                "You have an active task",
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ),
+                            Icon(Icons.arrow_forward_ios,
+                                color: Colors.white, size: 16),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 // HEADER
 
                 Container(
@@ -467,58 +530,36 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   // ================= SEARCH =================
 
   Widget _buildSearchBar() {
-
     return Container(
-
-      height: 58,
-
+      height: 55,
       decoration: BoxDecoration(
-
         color: Colors.white,
-
         borderRadius: BorderRadius.circular(18),
-
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-
       child: TextField(
-
         readOnly: true,
-
         decoration: InputDecoration(
-
           border: InputBorder.none,
-
-          hintText: "Search workers nearby",
-
-          prefixIcon: Icon(
-            Icons.search,
-            color: Colors.grey[600],
-          ),
-
-          suffixIcon: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Container(
-              decoration: BoxDecoration(
-                color: primaryColor,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.tune,
-                color: darkColor,
-              ),
+          hintText: "Search electricians, plumbers...",
+          hintStyle: TextStyle(color: Colors.grey[500]),
+          prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
+          suffixIcon: Container(
+            margin: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: primaryColor,
+              borderRadius: BorderRadius.circular(12),
             ),
+            child: Icon(Icons.tune, color: darkColor, size: 20),
           ),
         ),
-
         onTap: () {
-
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -532,102 +573,117 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       ),
     );
   }
-
   // ================= WORKER CARD =================
 
   Widget _buildWorkerCard(Map<String, dynamic> worker) {
+    final double distanceKm =
+        ((worker['distance'] ?? 0) as double) / 1000;
 
     return Container(
-
-      width: 220,
-
+      width: 240,
       margin: const EdgeInsets.only(right: 16),
-
-      padding: const EdgeInsets.all(16),
-
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-
-        color: backgroundColor,
-
-        borderRadius: BorderRadius.circular(24),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-
       child: Column(
-
         crossAxisAlignment: CrossAxisAlignment.start,
-
         children: [
 
+          // ===== TOP ROW =====
           Row(
-
             children: [
 
               CircleAvatar(
-                radius: 25,
+                radius: 26,
                 backgroundColor: primaryColor.withOpacity(0.2),
-                child: Icon(
-                  Icons.person,
-                  color: darkColor,
-                ),
+                child: Icon(Icons.person, color: darkColor),
               ),
 
-              const Spacer(),
+              const SizedBox(width: 10),
 
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  "Online",
-                  style: TextStyle(
-                    color: Colors.green,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      worker['fullName'] ?? 'Worker',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Row(
+                      children: [
+                        Icon(Icons.location_on,
+                            size: 14, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Text(
+                          "${distanceKm.toStringAsFixed(1)} km away",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
-          Text(
-            worker['fullName'],
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
+          // ===== STATS ROW =====
           Row(
             children: [
-              Icon(
+
+              _chip(
                 Icons.star,
-                color: Colors.orange,
-                size: 18,
+                "${(worker['rating'] ?? 4.5).toString()}",
+                Colors.orange,
               ),
-              const SizedBox(width: 4),
-              Text(
-                worker['rating'].toString(),
+
+              const SizedBox(width: 8),
+
+              _chip(
+                Icons.circle,
+                "Online",
+                Colors.green,
               ),
             ],
           ),
 
           const Spacer(),
 
+          // ===== CTA BUTTON =====
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-
-              onPressed: () {},
-
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ViewWorkerProfileScreen(
+                      workerId: worker['id'],
+                    ),
+                  ),
+                );
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: darkColor,
                 foregroundColor: primaryColor,
@@ -635,18 +691,38 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
-                padding:
-                const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 14),
               ),
-
-              child: const Text("Hire Worker"),
+              child: const Text("View Profile"),
             ),
           ),
         ],
       ),
     );
   }
-
+  Widget _chip(IconData icon, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   // ================= SERVICES =================
 
   Widget _buildServicesTab() {
@@ -852,33 +928,24 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   // ================= PROFILE =================
-
   Widget _buildProfileTab() {
-
     return SafeArea(
-
       child: Padding(
-
         padding: const EdgeInsets.all(20),
-
         child: Column(
-
           children: [
-
             const SizedBox(height: 20),
 
+            // Profile Picture
             CircleAvatar(
               radius: 55,
               backgroundColor: primaryColor,
-              child: Icon(
-                Icons.person,
-                size: 60,
-                color: darkColor,
-              ),
+              child: Icon(Icons.person, size: 60, color: darkColor),
             ),
 
             const SizedBox(height: 20),
 
+            // User Name
             Text(
               _userName,
               style: const TextStyle(
@@ -889,40 +956,68 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
             const SizedBox(height: 8),
 
+            // User Email
             Text(
               _userEmail,
-              style: TextStyle(
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(color: Colors.grey[600]),
             ),
 
             const SizedBox(height: 40),
 
-            _buildProfileTile(Icons.location_on, "Update Location"),
-            _buildProfileTile(Icons.history, "Task History"),
-            _buildProfileTile(Icons.support_agent, "Support"),
-            _buildProfileTile(Icons.settings, "Settings"),
+            // Menu Options
+            _buildProfileTile(Icons.location_on, "Update Location", () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const UpdateLocationScreen(),
+                ),
+              );
+            }),
+
+            _buildProfileTile(Icons.history, "Task History", () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TaskHistoryScreen(
+                    customerId: FirebaseAuth.instance.currentUser!.uid,
+                  ),
+                ),
+              );
+            }),
+
+            _buildProfileTile(Icons.support_agent, "Support", () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SupportScreen(),
+                ),
+              );
+            }),
+
+            _buildProfileTile(Icons.settings, "Settings", () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SettingsScreen(),
+                ),
+              );
+            }),
 
             const Spacer(),
 
+            // Logout Button
             SizedBox(
-
               width: double.infinity,
-
               child: ElevatedButton(
-
                 onPressed: _logout,
-
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red,
                   foregroundColor: Colors.white,
-                  padding:
-                  const EdgeInsets.symmetric(vertical: 18),
+                  padding: const EdgeInsets.symmetric(vertical: 18),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
                   ),
                 ),
-
                 child: const Text("LOGOUT"),
               ),
             ),
@@ -932,36 +1027,43 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
-  // ================= PROFILE TILE =================
+// ================= CORRECTED HELPER TILE METHOD =================
+// Add or replace your existing _buildProfileTile method with this signature
+// so it accepts all 3 positional arguments properly.
 
-  Widget _buildProfileTile(IconData icon, String title) {
 
-    return Container(
-
-      margin: const EdgeInsets.only(bottom: 14),
-
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-
-      child: ListTile(
-
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: primaryColor.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            icon,
-            color: darkColor,
-          ),
+  Widget _buildProfileTile(IconData icon, String title, Null Function() param2) {
+    return GestureDetector(
+      onTap: () {
+        if (title == "My Offers") {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const OffersListScreen(),
+            ),
+          );
+        }
+      },
+      child:
+      Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
         ),
 
-        title: Text(title),
-
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        child: ListTile(
+          leading: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: primaryColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: darkColor),
+          ),
+          title: Text(title),
+          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        ),
       ),
     );
   }
@@ -1011,7 +1113,32 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
               setState(() => _bottomIndex = 1);
             },
           ),
-
+          ListTile(
+            leading: const Icon(Icons.local_offer),
+            title: const Text("My Offers"),
+            onTap: () {
+              Navigator.pop(context); // close drawer first
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const OffersListScreen(),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.work),
+            title: const Text("Active Task"),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const CustomerActiveTasksScreen(),
+                ),
+              );
+            },
+          ),
           ListTile(
             leading: const Icon(Icons.task),
             title: const Text("Tasks"),

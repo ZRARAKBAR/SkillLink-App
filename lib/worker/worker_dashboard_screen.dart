@@ -4,7 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:skilllink_app/auth/login_screen.dart';
 import 'package:skilllink_app/worker/send_offer_screen.dart';
 import 'package:skilllink_app/worker/worker_task_details_screen.dart';
-
+import 'package:skilllink_app/worker/worker_booking_requests_screen.dart';
+import 'package:skilllink_app/worker/worker_active_job_screen.dart';
+import 'package:skilllink_app/worker/worker_job_history_screen.dart';
 class WorkerDashboardScreen extends StatefulWidget {
   const WorkerDashboardScreen({super.key});
 
@@ -280,17 +282,18 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                   ),
                 ),
                 onPressed: () async {
+                  print("TASK ID: $taskId");
+
                   final existing = await FirebaseFirestore.instance
-                      .collectionGroup('offers')
+                      .collection("tasks")
+                      .doc(taskId)
+                      .collection("offers")
                       .where('workerId', isEqualTo: _currentUid)
-                      .where('taskId', isEqualTo: taskId)
                       .get();
 
                   if (existing.docs.isNotEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("You already applied for this task"),
-                      ),
+                      const SnackBar(content: Text("You already applied for this task")),
                     );
                     return;
                   }
@@ -298,7 +301,10 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (c) => const SendOfferScreen(),
+                      builder: (context) => WorkerTaskDetailsScreen(
+                        taskId: taskId,
+                        taskData: task,
+                      ),
                     ),
                   );
                 },
@@ -469,7 +475,57 @@ class _WorkerDashboardScreenState extends State<WorkerDashboardScreen> {
                   : null,
             ),
           ),
-          const ListTile(leading: Icon(Icons.history), title: Text("Job History")),
+          ListTile(
+            leading: const Icon(Icons.assignment),
+            title: const Text("Booking Requests"),
+            trailing: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('bookings')
+                  .where('workerId', isEqualTo: _currentUid)
+                  .where('status', isEqualTo: 'pending')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final count = snapshot.data?.docs.length ?? 0;
+
+                if (count == 0) return const SizedBox.shrink();
+
+                return CircleAvatar(
+                  radius: 10,
+                  backgroundColor: Colors.red,
+                  child: Text(
+                    '$count',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                    ),
+                  ),
+                );
+              },
+            ),
+            onTap: () {
+              Navigator.pop(context);
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const WorkerBookingRequestsScreen(),
+                ),
+              );
+            },
+          ),ListTile(
+            leading: const Icon(Icons.work),
+            title: const Text("Active Jobs"),
+            onTap: () {
+              Navigator.pop(context);
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const WorkerActiveJobScreen(),
+                ),
+              );
+            },
+          ),
           const ListTile(leading: Icon(Icons.wallet), title: Text("Withdraw Earnings")),
           const Divider(),
           ListTile(

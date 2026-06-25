@@ -39,11 +39,11 @@ dependencies:
 
 
   lottie: ^3.1.0
-  firebase_core: ^4.7.0
+  firebase_core: ^4.11.0
   firebase_auth: ^6.4.0
-  cloud_firestore: ^6.3.0
+  cloud_firestore: ^6.6.0
   image_picker: ^1.2.2
-  firebase_storage: ^13.3.0
+  firebase_storage: ^13.4.3
   url_launcher: ^6.3.2
   file_picker: ^8.0.0
   google_maps_flutter: ^2.5.3
@@ -57,7 +57,9 @@ dependencies:
   connectivity_plus: ^6.0.3
   intl: ^0.19.0
   video_player: ^2.9.0
-shared_preferences: ^2.2.3
+  shared_preferences: ^2.2.3
+  firebase_messaging: ^16.4.0
+  geocoding: ^3.0.0
 
 
 
@@ -65,15 +67,16 @@ shared_preferences: ^2.2.3
 
 
 dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.13.1
 
 flutter_launcher_icons:
-    android: true
-    ios: true
-    image_path: assets/images/icon.png
-
-flutter_test:
-    sdk: flutter
+  android: true
+  ios: true
+  image_path: assets/images/icon.png
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

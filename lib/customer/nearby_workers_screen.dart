@@ -91,13 +91,10 @@ class _NearbyWorkersScreenState extends State<NearbyWorkersScreen> {
       for (var doc in snapshot.docs) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
-        GeoPoint? location;
-        if (data['location'] is GeoPoint) {
-          location = data['location'];
-        }
+        GeoPoint? location = data['location'] as GeoPoint?;
 
         if (location != null && _currentLocation != null) {
-          double distance = Geolocator.distanceBetween(
+          double distanceKm = Geolocator.distanceBetween(
             _currentLocation!.latitude,
             _currentLocation!.longitude,
             location.latitude,
@@ -105,26 +102,24 @@ class _NearbyWorkersScreenState extends State<NearbyWorkersScreen> {
           ) /
               1000;
 
-          if (distance <= 10) {
+          if (distanceKm <= 10) {
             workers.add({
               'id': doc.id,
               'name': data['fullName'] ?? 'Unknown Worker',
               'email': data['email'] ?? '',
               'phoneNumber': data['phoneNumber'] ?? '',
               'services': List<String>.from(data['services'] ?? []),
-              'rating': (data['rating'] ?? 0).toDouble(),
+              'rating': (data['rating'] ?? 4.5).toDouble(),
               'isVerified': data['isVerified'] ?? false,
-              'distance': distance,
+              'distance': distanceKm,
               'address': data['address'] ?? '',
             });
           }
         }
       }
 
-      workers.sort(
-            (a, b) => (a['distance'] as double)
-            .compareTo(b['distance'] as double),
-      );
+      workers.sort((a, b) =>
+          (a['distance'] as double).compareTo(b['distance'] as double));
 
       if (mounted) {
         setState(() => _nearbyWorkers = workers);
@@ -153,10 +148,16 @@ class _NearbyWorkersScreenState extends State<NearbyWorkersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF6F7FB),
+
       appBar: AppBar(
-        title: Text('Nearby Workers (${_nearbyWorkers.length})'),
-        backgroundColor: Colors.blue,
+        title: Text(
+          'Nearby Workers (${_nearbyWorkers.length})',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
             onPressed: _fetchNearbyWorkers,
@@ -164,21 +165,35 @@ class _NearbyWorkersScreenState extends State<NearbyWorkersScreen> {
           )
         ],
       ),
+
       body: Column(
         children: [
-          // SEARCH
+
+          // 🔍 MODERN SEARCH BAR
           Padding(
             padding: const EdgeInsets.all(12),
-            child: TextField(
-              decoration: InputDecoration(
-                hintText: "Search workers...",
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  )
+                ],
               ),
-              onChanged: (value) =>
-                  setState(() => _searchQuery = value),
+              child: TextField(
+                decoration: const InputDecoration(
+                  hintText: "Search workers or services...",
+                  prefixIcon: Icon(Icons.search),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.all(16),
+                ),
+                onChanged: (value) =>
+                    setState(() => _searchQuery = value),
+              ),
             ),
           ),
 
@@ -187,15 +202,13 @@ class _NearbyWorkersScreenState extends State<NearbyWorkersScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredWorkers.isEmpty
-                ? const Center(
-              child: Text("No workers found"),
-            )
+                ? _emptyState()
                 : ListView.builder(
               padding: const EdgeInsets.all(12),
               itemCount: _filteredWorkers.length,
               itemBuilder: (context, index) {
-                final worker = _filteredWorkers[index];
-                return _buildWorkerCard(worker);
+                return _buildWorkerCard(
+                    _filteredWorkers[index]);
               },
             ),
           ),
@@ -204,40 +217,195 @@ class _NearbyWorkersScreenState extends State<NearbyWorkersScreen> {
     );
   }
 
-  // ---------------- CARD ----------------
-  Widget _buildWorkerCard(Map<String, dynamic> worker) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: const CircleAvatar(
-          child: Icon(Icons.person),
-        ),
-        title: Text(worker['name']),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "⭐ ${worker['rating']}",
+  // ---------------- EMPTY STATE ----------------
+  Widget _emptyState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.search_off, size: 60, color: Colors.grey),
+          SizedBox(height: 10),
+          Text(
+            "No workers found",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
             ),
-            Text(
-              "${(worker['distance'] as double).toStringAsFixed(1)} km away",
-            ),
-          ],
-        ),
-        trailing: worker['isVerified']
-            ? const Icon(Icons.verified, color: Colors.green)
-            : const Icon(Icons.work_outline),
+          ),
+          SizedBox(height: 6),
+          Text(
+            "Try different search or expand location",
+            style: TextStyle(color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
 
-         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ViewWorkerProfileScreen(
-                workerId: worker['id'],
+  // ---------------- MODERN CARD ----------------
+  Widget _buildWorkerCard(Map<String, dynamic> worker) {
+    final double distance = worker['distance'] ?? 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+
+          // TOP ROW
+          Row(
+            children: [
+
+              CircleAvatar(
+                radius: 26,
+                backgroundColor: Colors.blue.withOpacity(0.1),
+                child: const Icon(Icons.person, color: Colors.blue),
               ),
+
+              const SizedBox(width: 12),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            worker['name'],
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+
+                        if (worker['isVerified'] == true)
+                          const Icon(Icons.verified,
+                              color: Colors.green, size: 18),
+                      ],
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Text(
+                      worker['address'] ?? "Service Provider",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // CHIPS
+          Wrap(
+            spacing: 8,
+            children: [
+              _chip(Icons.star, worker['rating'].toString(),
+                  Colors.orange),
+              _chip(Icons.location_on,
+                  "${distance.toStringAsFixed(1)} km",
+                  Colors.blue),
+              _chip(Icons.circle, "Online", Colors.green),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // SERVICES
+          if ((worker['services'] as List).isNotEmpty)
+            Wrap(
+              spacing: 6,
+              children: (worker['services'] as List)
+                  .take(3)
+                  .map((s) => Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  s.toString(),
+                  style: const TextStyle(fontSize: 11),
+                ),
+              ))
+                  .toList(),
             ),
-          );
-        },
+
+          const SizedBox(height: 14),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ViewWorkerProfileScreen(
+                      workerId: worker['id'],
+                    ),
+                  ),
+                );
+              },
+              child: const Text("View Profile"),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------- CHIP WIDGET ----------------
+  Widget _chip(IconData icon, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -11,6 +11,7 @@ class AvailableTasksScreen extends StatefulWidget {
 
 class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
   String _selectedCategory = 'All';
+
   final List<String> _categories = [
     'All',
     'Handyman',
@@ -20,6 +21,7 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
     'Cleaning',
     'Mason',
   ];
+
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -31,7 +33,6 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Setting up the Firestore query based on selected category
     Query tasksQuery = FirebaseFirestore.instance.collection('tasks');
 
     if (_selectedCategory != 'All') {
@@ -39,22 +40,24 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
         'categoryLower',
         isEqualTo: _selectedCategory.toLowerCase(),
       );
-    }//optional: order by newest if you have a timestamp field
-    // tasksQuery = tasksQuery.orderBy('createdAt', descending: true);
+    }
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text(
           'Available Tasks',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
         ),
         backgroundColor: Colors.white,
         elevation: 0,
       ),
       body: Column(
         children: [
-          // 1. Search Bar Section
+          // ================= SEARCH =================
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: TextField(
@@ -72,7 +75,7 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
                   icon: const Icon(Icons.clear),
                   onPressed: () {
                     _searchController.clear();
-                    setState(() { _searchQuery = ''; });
+                    setState(() => _searchQuery = '');
                   },
                 )
                     : null,
@@ -87,7 +90,7 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
             ),
           ),
 
-          // 2. Horizontal Category Filter
+          // ================= CATEGORY =================
           SizedBox(
             height: 40,
             child: ListView.builder(
@@ -97,6 +100,7 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
               itemBuilder: (context, index) {
                 final category = _categories[index];
                 final isSelected = _selectedCategory == category;
+
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilterChip(
@@ -105,8 +109,10 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
                     selectedColor: Colors.deepPurple,
                     checkmarkColor: Colors.white,
                     labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : Colors.black87,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
+                      color: isSelected ? Colors.white : Colors.black87,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                     backgroundColor: Colors.white,
                     onSelected: (bool selected) {
@@ -122,7 +128,7 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
 
           const SizedBox(height: 16),
 
-          // 3. Real-time Firestore Tasks List
+          // ================= TASK LIST =================
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: tasksQuery.snapshots(),
@@ -132,20 +138,28 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
                 }
 
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Colors.deepPurple));
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      color: Colors.deepPurple,
+                    ),
+                  );
                 }
 
                 final docs = snapshot.data?.docs ?? [];
 
-                // Local client-side filtering for basic search functionality
                 final filteredDocs = docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
-                  final title = (data['title'] ?? '').toString().toLowerCase();
-                  final category = (data['category'] ?? '').toString().toLowerCase();
 
-                  return title.contains(_searchQuery) ||
-                      category.contains(_searchQuery);
+                  final title =
+                  (data['title'] ?? '').toString().toLowerCase();
+                  final category =
+                  (data['category'] ?? '').toString().toLowerCase();
 
+                  final isLocked = data['isLocked'] ?? false;
+
+                  return !isLocked &&
+                      (title.contains(_searchQuery) ||
+                          category.contains(_searchQuery));
                 }).toList();
 
                 if (filteredDocs.isEmpty) {
@@ -158,9 +172,10 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
                   itemCount: filteredDocs.length,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemBuilder: (context, index) {
-                    final taskData = filteredDocs[index].data() as Map<String, dynamic>;
-                    // Passing document ID along in case you need it for the detail page
+                    final taskData =
+                    filteredDocs[index].data() as Map<String, dynamic>;
                     final taskId = filteredDocs[index].id;
+
                     return _buildTaskCard(taskData, taskId);
                   },
                 );
@@ -172,15 +187,17 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
     );
   }
 
-  // Task Card Widget Component
+  // ================= TASK CARD =================
   Widget _buildTaskCard(Map<String, dynamic> task, String taskId) {
-    // Safely mapping dynamic lists from Firestore
     final List<dynamic> rawTags = task['tags'] ?? [];
-    final List<String> tags = rawTags.map((e) => e.toString()).toList();
+    final List<String> tags =
+    rawTags.map((e) => e.toString()).toList();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       elevation: 2,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -200,12 +217,15 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top Row: Category & Posted Time
+              // CATEGORY + TIME
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.deepPurple.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
@@ -221,41 +241,57 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
                   ),
                   Text(
                     task['postedTime'] ?? 'Just now',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
+
               const SizedBox(height: 12),
 
-              // Title
+              // TITLE
               Text(
                 task['title'] ?? 'Untitled Task',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
                 ),
               ),
+
               const SizedBox(height: 12),
 
-              // Details Row: Location & Type
+              // LOCATION + TYPE (SAFE GEOPOINT HANDLING)
               Row(
                 children: [
-                  Icon(Icons.location_on_outlined, size: 16, color: Colors.grey[600]),
+                  Icon(Icons.location_on_outlined,
+                      size: 16, color: Colors.grey[600]),
                   const SizedBox(width: 4),
-                  Text(task['location'] ?? 'Remote', style: TextStyle(color: Colors.grey[600])),
+                  Text(
+                    task['location'] is GeoPoint
+                        ? "${task['location'].latitude}, ${task['location'].longitude}"
+                        : task['location']?.toString() ?? 'Remote',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
                   const SizedBox(width: 16),
-                  Icon(Icons.work_outline, size: 16, color: Colors.grey[600]),
+                  Icon(Icons.work_outline,
+                      size: 16, color: Colors.grey[600]),
                   const SizedBox(width: 4),
-                  Text(task['type'] ?? 'Fixed', style: TextStyle(color: Colors.grey[600])),
+                  Text(
+                    task['type'] ?? 'Fixed',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
                 ],
               ),
+
               const SizedBox(height: 16),
 
-              Divider(color: Colors.grey[200], height: 1),
+              Divider(color: Colors.grey[200]),
+
               const SizedBox(height: 12),
 
-              // Bottom Row: Tags & Budget
+              // TAGS + BUDGET
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -263,18 +299,20 @@ class _AvailableTasksScreenState extends State<AvailableTasksScreen> {
                     child: Wrap(
                       spacing: 6,
                       runSpacing: 4,
-                      children: tags.map((tag) {
-                        return Chip(
-                          label: Text(tag, style: const TextStyle(fontSize: 10)),
-                          backgroundColor: Colors.grey[200],
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          padding: EdgeInsets.zero,
-                        );
-                      }).toList(),
+                      children: tags
+                          .map((tag) => Chip(
+                        label: Text(
+                          tag,
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                        backgroundColor: Colors.grey[200],
+                      ))
+                          .toList(),
                     ),
                   ),
+
                   Text(
-                    task['budget'] ?? '\$0',
+                    "Rs. ${task['budget'] ?? 0}",
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

@@ -189,7 +189,7 @@ class _SplashScreenState extends State<SplashScreen>
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            "Developed By: Zrar Akbar & Tabia Nasir",
+                            "Developed By: Zrar Akbar ,Sohaib Dost & Tabia Nasir",
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w300,
