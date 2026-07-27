@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -9,54 +10,94 @@ class AdminDashboardScreen extends StatefulWidget {
   static const Color primaryBlack = Color(0xFF121212);
   static const Color inDriveGreen = Color(0xFFC6FF00);
 
-  static final Stream<QuerySnapshot> usersStream =
-  FirebaseFirestore.instance.collection('users').snapshots(
-    includeMetadataChanges: false,
-  );
+  static const String adminEmail = "zrarakbar1@gmail.com";
 
   @override
   State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-
-  String? adminEmail;
+  // Single, long-lived subscription owned by this State object.
+  // All three tabs read from the SAME cached snapshot below instead of
+  // each tab creating its own StreamBuilder/subscription. That was the
+  // actual bug: TabBarView only builds a tab's widget the first time you
+  // swipe into it, so a per-tab StreamBuilder was racing network latency
+  // every time, and any parent rebuild created a brand new Stream object,
+  // resetting that tab back to "waiting" — hence the spinner reappearing.
+  StreamSubscription<QuerySnapshot>? _usersSub;
+  QuerySnapshot? _usersSnapshot;
+  Object? _usersError;
 
   @override
   void initState() {
     super.initState();
-
-    final user = FirebaseAuth.instance.currentUser;
-
-    print("AUTH USER: ${user?.uid}");
-
-    if (user == null) {
-      print("⚠️ AUTH NOT READY OR USER NOT LOGGED IN");
-    } else {
-      adminEmail = user.email;
-      print("ADMIN EMAIL: $adminEmail");
-    }
+    _usersSub = FirebaseFirestore.instance
+        .collection('users')
+        .snapshots()
+        .listen(
+          (snapshot) {
+        if (!mounted) return;
+        setState(() {
+          _usersSnapshot = snapshot;
+          _usersError = null;
+        });
+      },
+      onError: (error) {
+        debugPrint("Firestore error: $error");
+        if (!mounted) return;
+        setState(() {
+          _usersError = error;
+        });
+      },
+    );
   }
 
-  // ================= SAFE AUTH GUARD =================
-  bool get isAdminUser {
-    return FirebaseAuth.instance.currentUser?.email ==
-        "zrarakbar1@gmail.com";
+  @override
+  void dispose() {
+    _usersSub?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Listen to auth state instead of reading currentUser once.
+    // currentUser can be null for a moment (or indefinitely for this
+    // widget) while Firebase is still restoring the persisted session.
+    // Without a listener, the UI never rebuilds once the user loads,
+    // which is what was causing the endless spinner originally.
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, authSnapshot) {
+        if (authSnapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-     final user = FirebaseAuth.instance.currentUser;
+        final user = authSnapshot.data;
 
-    if (user == null) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
+        if (user == null) {
+          return const Scaffold(
+            body: Center(
+              child: Text("You must be signed in to view this page."),
+            ),
+          );
+        }
 
+        if (user.email != AdminDashboardScreen.adminEmail) {
+          return const Scaffold(
+            body: Center(
+              child: Text("You are not authorized to view this page."),
+            ),
+          );
+        }
+
+        return _buildDashboard(context);
+      },
+    );
+  }
+
+  Widget _buildDashboard(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -104,68 +145,63 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   // ================= USERS =================
   Widget _buildUserList(String role) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: AdminDashboardScreen.usersStream,
-      builder: (context, snapshot) {
+    if (_usersError != null) {
+      return Center(child: Text("Firestore Error:\n$_usersError"));
+    }
 
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    if (_usersSnapshot == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-        if (snapshot.hasError) {
-          return Center(child: Text("Firestore Error:\n${snapshot.error}"));
-        }
+    final users = _usersSnapshot!.docs.where((doc) {
+      final data = Map<String, dynamic>.from(doc.data() as Map);
+      return data['role']?.toString() == role;
+    }).toList();
 
-        final users = snapshot.data!.docs.where((doc) {
-          final data = Map<String, dynamic>.from(doc.data() as Map);
-          return data['role']?.toString() == role;
-        }).toList();
+    if (users.isEmpty) {
+      return Center(child: Text("No $role users found."));
+    }
 
-        return ListView.builder(
-          itemCount: users.length,
-          itemBuilder: (context, index) {
-            final user =
-            Map<String, dynamic>.from(users[index].data() as Map);
-            final userId = users[index].id;
+    return ListView.builder(
+      itemCount: users.length,
+      itemBuilder: (context, index) {
+        final user = Map<String, dynamic>.from(users[index].data() as Map);
+        final userId = users[index].id;
 
-            return _buildUserCard(context, user, userId);
-          },
-        );
+        return _buildUserCard(context, user, userId);
       },
     );
   }
 
   // ================= PENDING =================
   Widget _buildPendingList() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: AdminDashboardScreen.usersStream,
-      builder: (context, snapshot) {
+    if (_usersError != null) {
+      return Center(child: Text("Firestore Error:\n$_usersError"));
+    }
 
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    if (_usersSnapshot == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-        if (snapshot.hasError) {
-          return Center(child: Text("Firestore Error:\n${snapshot.error}"));
-        }
+    final pendingUsers = _usersSnapshot!.docs.where((doc) {
+      final data = Map<String, dynamic>.from(doc.data() as Map);
 
-        final pendingUsers = snapshot.data!.docs.where((doc) {
-          final data = Map<String, dynamic>.from(doc.data() as Map);
+      return (data['isVerified'] ?? false) == false &&
+          data['role']?.toString() != 'admin';
+    }).toList();
 
-          return (data['isVerified'] ?? false) == false &&
-              data['role']?.toString() != 'admin';
-        }).toList();
+    if (pendingUsers.isEmpty) {
+      return const Center(child: Text("No pending users."));
+    }
 
-        return ListView.builder(
-          itemCount: pendingUsers.length,
-          itemBuilder: (context, index) {
-            final user =
-            Map<String, dynamic>.from(pendingUsers[index].data() as Map);
-            final userId = pendingUsers[index].id;
+    return ListView.builder(
+      itemCount: pendingUsers.length,
+      itemBuilder: (context, index) {
+        final user =
+        Map<String, dynamic>.from(pendingUsers[index].data() as Map);
+        final userId = pendingUsers[index].id;
 
-            return _buildUserCard(context, user, userId);
-          },
-        );
+        return _buildUserCard(context, user, userId);
       },
     );
   }

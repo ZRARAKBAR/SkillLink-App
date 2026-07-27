@@ -127,26 +127,12 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     );
   }
 
-   void _openAdminControlCenter() {
-    String password = _passwordController.text.trim();
-
-     if (password == 'skilllinkadmin999') {
-      _emailController.clear();
-      _passwordController.clear();
-
-      _showEnhancedSnackBar(
-          'Developer Override: Launching Admin Control Center...',
-          Colors.purple.shade600
-      );
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const AdminDashboardScreen()),
-      );
-    } else {
-       _showEnhancedSnackBar('Welcome to SkillLink!', Colors.grey.shade700);
-    }
-  }
+  // NOTE: The hardcoded "_openAdminControlCenter" developer-override backdoor
+  // (password 'skilllinkadmin999' typed into the password field + long-press
+  // on "Welcome Back") has been removed. It bypassed Firebase Auth entirely
+  // and was extractable from the compiled APK. Admin access now only goes
+  // through the normal _handleLogin flow below, which properly authenticates
+  // with Firebase before checking the admin email.
 
   void _handleLogin() async {
     String email = _emailController.text.trim();
@@ -361,32 +347,29 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
                           ),
                           const SizedBox(height: 50),
 
-                          // Welcome Text (Long Press Target Area)
-                          GestureDetector(
-                            onLongPress: _openAdminControlCenter,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "Welcome",
-                                  style: TextStyle(
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.w900,
-                                    color: primaryBlack,
-                                    height: 1.1,
-                                  ),
+                          // Welcome Text
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Welcome",
+                                style: TextStyle(
+                                  fontSize: 36,
+                                  fontWeight: FontWeight.w900,
+                                  color: primaryBlack,
+                                  height: 1.1,
                                 ),
-                                Text(
-                                  "Back",
-                                  style: TextStyle(
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.w900,
-                                    color: inDriveGreen,
-                                    height: 1.1,
-                                  ),
+                              ),
+                              Text(
+                                "Back",
+                                style: TextStyle(
+                                  fontSize: 36,
+                                  fontWeight: FontWeight.w900,
+                                  color: inDriveGreen,
+                                  height: 1.1,
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 10),
                           Text(
